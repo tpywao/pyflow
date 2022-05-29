@@ -1,3 +1,4 @@
+use std::num::{ParseIntError, IntErrorKind};
 use std::str::FromStr;
 
 use nom::bytes::complete::{tag, take, take_till};
@@ -285,10 +286,23 @@ fn parse_digit_or_wildcard(input: &str) -> IResult<&str, u32> {
     )(input)
 }
 
+fn parse_int(n: &str)->Result<u32, ParseIntError>{
+    // some python package has too long version number
+    // e.g. graphene-django `.dev20160919000004`
+    // cause ParseIntError { PosOverflow }
+    if n.len() >= 10 {
+        let s = n.to_string();
+        let n = &s[..10];
+        n.parse()
+    } else {
+        n.parse()
+    }
+}
+
 fn parse_modifier(input: &str) -> IResult<&str, Option<(VersionModifier, u32)>> {
     opt(map(
         tuple((opt(tag(".")), parse_modifier_version, digit1)),
-        |(_, version_modifier, n)| (version_modifier, n.parse().unwrap()),
+        |(_, version_modifier, n)| (version_modifier, parse_int(n).unwrap()),
     ))(input)
 }
 
@@ -403,6 +417,15 @@ mod tests {
                  patch: Some(3),
                  extra_num: None,
                  modifier: Some((VersionModifier::Other("dev".to_string()), 0)),
+                 star: false,
+        }))),
+        // This package version showed up in graphene-django history
+        case("1.0.dev20160922000001", Ok(("", Version {
+                 major: Some(1),
+                 minor: Some(0),
+                 patch: None,
+                 extra_num: None,
+                 modifier: Some((VersionModifier::Other("dev".to_string()), 2016092200)),
                  star: false,
         }))),
     )]
